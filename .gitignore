@@ -1,11 +1,57 @@
+# ── HARD GUARD: customer / solution work must NEVER enter this public repo ────
+# This SDK repo is public. Client engagements, deployment configs, and any
+# customer-identifying material live elsewhere and are ignored here by name so
+# they can never be committed by accident.
+solutions/
+solution/
+customers/
+customer/
+clients/
+client-*/
+klant/
+klanten/
+tenants/
+tenant-*/
+engagements/
+deployments/
+*.customer.*
+*.client.*
+*-customer/
+*-klant/
+
+# ── Node / JS ────────────────────────────────────────────────────────────────
 node_modules/
-.venv/
-venv/
-__pycache__/
-*.pyc
-*.egg-info/
+npm-debug.log*
+yarn-error.log*
+*.tgz
+.npm/
 dist/
 build/
-*.tgz
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+.venv/
+venv/
+env/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.whl
+
+# ── Conformance / test local deps (point env vars at these; never commit) ─────
+tests/conformance/node_modules/
+tests/conformance/.venv/
+*.node
+
+# ── Editor / OS / secrets ────────────────────────────────────────────────────
 .DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+.env
+.env.*

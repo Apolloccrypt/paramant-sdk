@@ -7,7 +7,7 @@ Two implementations, one wire format:
 - JavaScript / Node: [`sdk-js/`](sdk-js/) (npm: [`paramant-sdk`](https://www.npmjs.com/package/paramant-sdk))
 - Python: [`sdk-py/`](sdk-py/) (PyPI: [`paramant-sdk`](https://pypi.org/project/paramant-sdk/))
 
-Crypto: ML-KEM-768 (FIPS 203) for key encapsulation, ML-DSA-65 (FIPS 204) for signatures, AES-256-GCM with HKDF-SHA256 for the payload envelope. Wire format v1 (PQHB magic).
+Crypto: ML-KEM-768 (FIPS 203) for key encapsulation and ML-DSA-65 (FIPS 204) for signatures are the default, with AES-256-GCM and HKDF-SHA256 for the payload envelope. Wire format v1 (PQHB magic). Additional algorithms (the "extended" set) are opt-in and negotiated against the relay's `/v2/capabilities`; the SDKs never silently substitute an algorithm the relay does not advertise.
 
 ## Wire-format spec
 
