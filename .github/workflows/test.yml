@@ -1,0 +1,80 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-js:
+    name: sdk-js · node test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install
+        working-directory: sdk-js
+        run: npm install
+      - name: Test
+        working-directory: sdk-js
+        run: npm test
+
+  sdk-py:
+    name: sdk-py · pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install + test
+        working-directory: sdk-py
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+          pytest -v
+
+  conformance:
+    name: conformance · cross-impl (sdk-js + sdk-py + core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      # @paramant/core is the Rust NAPI binding (sibling repo). Build it so the
+      # suite checks byte-compatibility against it. The relay adapter is absent
+      # here and is skipped-with-message (never silently passed).
+      - name: liboqs build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang libclang-dev
+      - name: Build @paramant/core
+        run: |
+          git clone --depth 1 https://github.com/Apolloccrypt/paramant-core.git "${GITHUB_WORKSPACE}/../paramant-core"
+          cd "${GITHUB_WORKSPACE}/../paramant-core"
+          rustup show
+          cargo build -p paramant-core-node --release
+          cp target/release/libparamant_core_node.so crates/paramant-core-node/index.node
+      - name: sdk-js deps (noble)
+        working-directory: sdk-js
+        run: npm install
+      - name: python deps (pqcrypto + cryptography)
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install pqcrypto cryptography
+      - name: Run conformance
+        env:
+          PARAMANT_CORE_NODE: ${{ github.workspace }}/../paramant-core/crates/paramant-core-node/index.node
+          PARAMANT_PY: ${{ github.workspace }}/.venv/bin/python
+        run: node --test tests/conformance/conformance.test.mjs

@@ -1,0 +1,78 @@
+name: release
+
+# Publishes paramant-sdk to PyPI and npm when a GitHub Release is published.
+# Tag the release "v<version>" (e.g. v3.2.0); the version must match both
+# sdk-py/pyproject.toml and sdk-js/package.json or the run fails before publish.
+#
+# One-time setup (see RELEASING.md):
+#   PyPI: configure a Trusted Publisher (OIDC) on the paramant-sdk project, so
+#         no token is needed here.
+#   npm:  add an automation token as the NPM_TOKEN repository secret.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-pypi:
+    name: PyPI · paramant-sdk
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # OIDC trusted publishing (no stored token)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Version matches release tag
+        if: github.event_name == 'release'
+        working-directory: sdk-py
+        run: |
+          PKG=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG="${{ github.event.release.tag_name }}"; TAG="${TAG#v}"
+          echo "pyproject=$PKG tag=$TAG"
+          test "$PKG" = "$TAG"
+      - name: Build sdist + wheel
+        working-directory: sdk-py
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk-py/dist
+
+  publish-npm:
+    name: npm · paramant-sdk
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # for npm provenance
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Version matches release tag
+        if: github.event_name == 'release'
+        working-directory: sdk-js
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${{ github.event.release.tag_name }}"; TAG="${TAG#v}"
+          echo "package.json=$PKG tag=$TAG"
+          test "$PKG" = "$TAG"
+      - name: Install + test (gate)
+        working-directory: sdk-js
+        run: |
+          npm install
+          npm test
+      - name: Publish to npm
+        working-directory: sdk-js
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
