@@ -9,7 +9,7 @@ Run the listener in one terminal, then send a file from another.
 """
 
 import asyncio
-from paramant import GhostPipe
+from paramant_sdk import GhostPipe
 
 API_KEY  = 'pgp_xxx'
 DEVICE   = 'ws-listener-001'

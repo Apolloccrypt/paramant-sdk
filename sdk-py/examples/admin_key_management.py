@@ -7,7 +7,7 @@ check license status, and view relay statistics.
 Requires admin token (set in relay environment as ADMIN_TOKEN).
 """
 
-from paramant import GhostPipe
+from paramant_sdk import GhostPipe
 
 API_KEY      = 'pgp_xxx'
 ADMIN_TOKEN  = 'your-admin-token'
