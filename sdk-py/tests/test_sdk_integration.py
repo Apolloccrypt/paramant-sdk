@@ -9,9 +9,9 @@ from unittest import mock
 
 import pytest
 
-import paramant_sdk
+import paramant
 from paramant import wire_format
-from paramant_sdk import GhostPipe, GhostPipeError
+from paramant import GhostPipe, GhostPipeError
 
 
 API_KEY = "pgp_testkey_0123456789abcdef"
@@ -34,7 +34,7 @@ def _make_gp(home_tmp, device: str, kem_id=0x0002, sig_id=0x0002):
 
 
 def test_version_is_3_1_0():
-    assert paramant_sdk.__version__ == "3.2.0"
+    assert paramant.__version__ == "3.2.0"
 
 
 def test_encrypt_decrypt_round_trip_signed(home_tmp):

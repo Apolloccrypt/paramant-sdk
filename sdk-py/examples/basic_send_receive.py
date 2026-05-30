@@ -7,7 +7,7 @@ Run on two machines (or two terminals):
 """
 
 import sys
-from paramant_sdk import GhostPipe
+from paramant import GhostPipe
 
 API_KEY = 'pgp_xxx'        # replace with your API key
 SENDER  = 'laptop-001'

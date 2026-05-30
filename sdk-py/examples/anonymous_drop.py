@@ -8,7 +8,7 @@ Use case: whistleblower, journalist source, anonymous tip line.
 """
 
 import sys
-from paramant_sdk import GhostPipe
+from paramant import GhostPipe
 
 
 def drop_file(path: str):

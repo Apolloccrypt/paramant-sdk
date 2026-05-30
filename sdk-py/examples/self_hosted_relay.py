@@ -4,7 +4,7 @@ Self-hosted relay example.
 Shows how to point the SDK at your own relay instance instead of relay.paramant.app.
 """
 
-from paramant_sdk import GhostPipe
+from paramant import GhostPipe
 
 MY_RELAY = 'https://relay.example.com'   # your relay URL
 API_KEY  = 'pgp_xxx'

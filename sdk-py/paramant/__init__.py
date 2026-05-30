@@ -18,6 +18,13 @@ from .errors import (
 from . import wire_format
 from . import crypto
 from . import capabilities
+from .client import (
+    GhostPipe,
+    GhostPipeCluster,
+    GhostPipeError,
+    SignatureError,
+    FingerprintMismatchError,
+)
 
 __all__ = [
     "ParamantError",
@@ -30,6 +37,11 @@ __all__ = [
     "wire_format",
     "crypto",
     "capabilities",
+    "GhostPipe",
+    "GhostPipeCluster",
+    "GhostPipeError",
+    "SignatureError",
+    "FingerprintMismatchError",
     "__version__",
 ]
 

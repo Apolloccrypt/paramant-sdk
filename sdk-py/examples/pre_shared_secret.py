@@ -11,7 +11,7 @@ Use cases:
 - Any scenario where relay MITM is a realistic threat
 """
 
-from paramant_sdk import GhostPipe, FingerprintMismatchError
+from paramant import GhostPipe, FingerprintMismatchError
 
 API_KEY = 'pgp_xxx'
 

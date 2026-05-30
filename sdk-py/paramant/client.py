@@ -30,8 +30,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from paramant import capabilities, crypto, wire_format
-from paramant.errors import CapabilityMismatch, ParamantError, UnsupportedAlgorithm
+from . import capabilities, crypto, wire_format
+from .errors import CapabilityMismatch, ParamantError, UnsupportedAlgorithm
 
 __version__ = "3.2.0"
 

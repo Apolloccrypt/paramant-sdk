@@ -13,7 +13,8 @@ import tempfile
 
 import pytest
 
-from paramant_sdk import GhostPipe, GhostPipeError, SignatureError, _zero, _secret, _canonical_sign_input
+from paramant import GhostPipe, GhostPipeError, SignatureError
+from paramant.client import _zero, _secret, _canonical_sign_input
 from paramant import crypto, wire_format
 from paramant.errors import UnsupportedAlgorithm
 

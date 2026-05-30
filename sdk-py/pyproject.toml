@@ -43,7 +43,7 @@ Changelog = "https://github.com/Apolloccrypt/paramant-sdk/releases"
 "Bug Tracker" = "https://github.com/Apolloccrypt/paramant-sdk/issues"
 
 [project.scripts]
-paramant-sdk = "paramant_sdk:_cli_main"
+paramant-sdk = "paramant.client:_cli_main"
 
 [tool.setuptools]
 py-modules = ["paramant_sdk"]
