@@ -50,6 +50,23 @@ test('F3: fingerprint binds the signing key (5 groups, 20 hex)', async () => {
   assert.equal(fp1.replace(/-/g, '').length, 20);
 });
 
+test('F1b: signature-downgrade — unsigned blob is rejected when a sender is pinned', async () => {
+  // Threat model: the attacker knows only the recipient's PUBLIC KEM key.
+  const victim = gp('victim'), realSender = gp('real-sender'), attacker = gp('attacker');
+  const victimKemPub = (await victim._loadKeypair()).kem_pub;
+  const pinnedSender = Uint8Array.from(Buffer.from((await realSender._loadKeypair()).sig_pub, 'hex'));
+
+  // Attacker forges an UNSIGNED (sigId NONE) blob to the victim's KEM pubkey.
+  const { blob } = await attacker._encrypt(TE('FORGED — not from real-sender'), victimKemPub, { sigId: SIG.NONE });
+  assert.equal(wireDecode(blob).sigId, SIG.NONE);
+
+  // receive({ sender }) pins a sender -> the unsigned blob MUST be refused.
+  await assert.rejects(() => victim._decrypt(blob, '', { expectedSenderSigPub: pinnedSender }), SignatureError);
+
+  // Anonymous tier preserved: with NO sender pin the same blob still decrypts.
+  assert.equal(new TextDecoder().decode(await victim._decrypt(blob)), 'FORGED — not from real-sender');
+});
+
 test('F4: unimplemented algorithm id throws at construction', () => {
   assert.throws(() => gp('x', { kemId: 0x00ff }));
 });
