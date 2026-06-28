@@ -27,6 +27,8 @@ export interface GhostPipeOptions {
   sigId?: number;
   /** Query /v2/capabilities before first send. Default: true */
   checkCapabilities?: boolean;
+  /** Pinned relay ML-DSA identity public key (hex) for client-side receipt verification (F2). */
+  relayIdentityPub?: string;
 }
 
 export interface SendOptions {
@@ -39,6 +41,15 @@ export interface SendOptions {
 
 export interface ReceiveOptions {
   preSharedSecret?: string;
+  /** Pin the blob's sender signing key against this device's registered key (authenticates origin). */
+  sender?: string;
+}
+
+export interface VerifyReceiptOptions {
+  /** Pinned relay ML-DSA identity public key (hex); overrides the constructor value. */
+  relayIdentityPub?: string;
+  /** Fall back to the untrusted relay's /v2/verify-receipt (debugging only). Default: false. */
+  allowRelayFallback?: boolean;
 }
 
 export interface SendAnonymousOptions {
@@ -116,6 +127,12 @@ export function wireDecode(blob: Uint8Array): WireDecodeResult;
 export function buildAAD(input: { kemId: number; sigId: number; flags?: number; chunkIndex?: number }): Uint8Array;
 export function isV1(blob: Uint8Array): boolean;
 
+/** SHA-256(kem_pub_bytes || sig_pub_bytes), first 10 bytes as five 4-hex groups. */
+export function computeFingerprint(kemPubHex: string, sigPubHex: string): Promise<string>;
+
+/** Canonical JSON (recursively sorted keys, no whitespace) used for ML-DSA receipt signing. */
+export function canonicalJSON(value: unknown): string;
+
 // ── Capabilities ──────────────────────────────────────────────────────────────
 
 export function fetchCapabilities(relayUrl: string, opts?: { fetch?: typeof fetch; timeout?: number }): Promise<CapabilitiesResponse>;
@@ -140,6 +157,7 @@ export class GhostPipe {
   relay: string;
   readonly kemId: number;
   readonly sigId: number;
+  readonly relayIdentityPub: string;
   constructor(options: GhostPipeOptions);
 
   capabilities(): Promise<CapabilitiesResponse>;
@@ -186,7 +204,7 @@ export class GhostPipe {
   audit(opts?: { limit?: number; format?: 'json' | 'csv' }): Promise<unknown[] | string>;
   ctLog(from?: number, limit?: number): Promise<Record<string, unknown>>;
   ctProof(index: number): Promise<Record<string, unknown>>;
-  verifyReceipt(receipt: string | object): Promise<Record<string, unknown>>;
+  verifyReceipt(receipt: string | object, options?: VerifyReceiptOptions): Promise<Record<string, unknown>>;
 
   // DID
   didRegister(dsaPub?: string): Promise<Record<string, unknown>>;

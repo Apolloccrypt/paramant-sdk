@@ -56,6 +56,12 @@ export const sdkJsWire = resolveDep('PARAMANT_SDK_JS_WIRE', [
   join(repoRoot, 'sdk-js', 'src', 'wire-format.js'),
 ]);
 
+// sdk-js package entry — source of the real canonicalJSON (RT2), imported
+// directly so the suite no longer keeps a drift-prone embedded copy.
+export const sdkJsIndex = resolveDep('PARAMANT_SDK_JS_INDEX', [
+  join(repoRoot, 'sdk-js', 'index.js'),
+]);
+
 export const sdkPyDir = resolveDep('PARAMANT_SDK_PY_DIR', [
   join(repoRoot, 'sdk-py'),
 ]);

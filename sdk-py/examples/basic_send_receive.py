@@ -16,8 +16,8 @@ RECEIVER = 'server-001'
 
 def do_receive_setup():
     gp = GhostPipe(api_key=API_KEY, device=RECEIVER)
-    result = gp.receive_setup()
-    print(f'Receiver registered. Fingerprint: {result["fingerprint"]}')
+    gp.receive_setup()                       # registers pubkeys, returns the client
+    print(f'Receiver registered. Fingerprint: {gp.fingerprint()}')
     print('Waiting for transfer — send a hash to receive it:')
     print('  python basic_send_receive.py receive <hash>')
 
@@ -25,7 +25,7 @@ def do_receive_setup():
 def do_send():
     gp = GhostPipe(api_key=API_KEY, device=SENDER)
     payload = b'Hello from Ghost Pipe!'
-    h = gp.send(payload, recipient=RECEIVER)
+    h, _proof = gp.send(payload, recipient=RECEIVER)   # send() -> (hash, merkle_proof)
     print(f'Transfer hash: {h}')
     print(f'On the receiver, run:')
     print(f'  python basic_send_receive.py receive {h}')
@@ -33,7 +33,7 @@ def do_send():
 
 def do_receive(hash_):
     gp = GhostPipe(api_key=API_KEY, device=RECEIVER)
-    data = gp.receive(hash_)
+    data, _receipt = gp.receive(hash_)                 # receive() -> (data, receipt)
     print(f'Received {len(data)} bytes: {data.decode()}')
 
 

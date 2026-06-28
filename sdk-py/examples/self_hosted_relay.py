@@ -22,7 +22,7 @@ def send_via_self_hosted():
     print(f'Relay version: {info["version"]}  uptime: {info["uptime"]}s')
 
     # Send
-    h = gp.send(b'Confidential payload', recipient='receiver-001')
+    h, _proof = gp.send(b'Confidential payload', recipient='receiver-001')
     print(f'Transfer hash: {h}')
     return h
 
@@ -34,7 +34,7 @@ def receive_via_self_hosted(h: str):
         relay=MY_RELAY,
     )
     gp.receive_setup()
-    data = gp.receive(h)
+    data, _receipt = gp.receive(h)
     print(f'Got: {data.decode()}')
 
 

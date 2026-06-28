@@ -84,10 +84,9 @@ running. Point the env vars at the new layout and `node --test` it.
 
 Verified: copied to a relay-free repo root → 17 pass, 2 skip, 0 fail.
 
-## Known limitation
+## canonicalJSON source
 
-`sdk-js`'s `canonicalJSON` is an internal, non-exported function (`index.js:154`),
-so the JS form is checked via a **verbatim embedded copy** (cited) plus the real
-`relay/parasign.js` sibling implementation. If `sdk-js` ever exports
-`canonicalJSON`, switch the RT2 JS assertion to import it directly. Until then,
-keep the embedded copy in sync with `index.js:154` — or, preferably, export it.
+As of `sdk-js` 3.2.0 `canonicalJSON` is **exported** from the package entry, so
+RT2 imports the real function directly (`PARAMANT_SDK_JS_INDEX`, default
+`sdk-js/index.js`) instead of keeping a drift-prone embedded copy. The real
+`relay/parasign.js` sibling implementation is still cross-checked when present.

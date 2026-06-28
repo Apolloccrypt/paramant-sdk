@@ -17,9 +17,8 @@ def drop_file(path: str):
     with open(path, 'rb') as f:
         data = f.read()
 
-    mnemonic, h = gp.drop(data, ttl=86400)   # burn after 24 hours
+    mnemonic = gp.drop(data, ttl=86400)      # drop() -> mnemonic str; burns after 24h
     print('=== ANONYMOUS DROP ===')
-    print(f'Hash:     {h}')
     print(f'Mnemonic: {mnemonic}')
     print()
     print('Give the mnemonic to your contact via a secure channel.')
