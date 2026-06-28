@@ -38,7 +38,7 @@ def healthcare_workflow():
 
     dicom_data = b'<fake DICOM bytes for demonstration>'
     try:
-        h = gp_mri.send(
+        h, _proof = gp_mri.send(
             dicom_data,
             recipient='pacs-001',
             pre_shared_secret=PSS,   # relay MITM impossible
@@ -53,7 +53,7 @@ def healthcare_workflow():
         return
 
     # --- PACS receives ---
-    data = gp_pacs.receive(h, pre_shared_secret=PSS)
+    data, _receipt = gp_pacs.receive(h, pre_shared_secret=PSS)
     print(f'PACS received {len(data)} bytes')
     print()
     print('Security guarantees:')
@@ -79,7 +79,7 @@ def legal_workflow():
     gp_a.trust('lawfirm-b-001')
 
     contract = b'<confidential contract PDF bytes>'
-    h = gp_a.send(
+    h, _proof = gp_a.send(
         contract,
         recipient='lawfirm-b-001',
         pre_shared_secret=PSS,
@@ -87,7 +87,7 @@ def legal_workflow():
     print(f'Transfer hash: {h}')
 
     gp_b = GhostPipe(api_key=API_KEY, device='lawfirm-b-001')
-    data = gp_b.receive(h, pre_shared_secret=PSS)
+    data, _receipt = gp_b.receive(h, pre_shared_secret=PSS)
     print(f'Law Firm B received {len(data)} bytes')
 
 
