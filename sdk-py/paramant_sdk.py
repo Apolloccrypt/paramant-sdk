@@ -544,6 +544,17 @@ class GhostPipe:
             kem_id=parsed["kem_id"], sig_id=parsed["sig_id"], chunk_index=0
         )
 
+        # Downgrade defence (mirror of sdk-js): an unsigned blob (sig_id NONE)
+        # carries no sender authentication. The signature+pinning checks below
+        # are skipped for a NONE blob, so if the caller pinned an expected
+        # sender an attacker who only knows the recipient's public KEM key could
+        # forge an unsigned blob and have receive(sender=...) accept it as
+        # authenticated. Refuse an unsigned blob whenever a sender is pinned.
+        if expected_sender_sig_pub is not None and parsed["sig_id"] == crypto.SIG_ID_NONE:
+            raise SignatureError(
+                "refusing an unsigned blob while a sender is pinned (signature-downgrade attack)"
+            )
+
         # ── F1: verify the sender signature BEFORE decrypting. 3.0.0 (py) never
         # called sig_verify, so a tampered signature or a swapped sender_pub was
         # accepted silently. sdk-js already verifies; this aligns sdk-py.

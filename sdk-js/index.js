@@ -617,6 +617,17 @@ export class GhostPipe {
     // signature is cryptographically valid for the senderPub carried in
     // the blob. Pre-fix this branch silently accepted any bytes in the
     // signature field.
+    //
+    // Downgrade defence: an unsigned blob (sigId NONE) carries no sender
+    // authentication at all. If the caller pinned an expected sender, the
+    // signature+pinning checks below are skipped for a NONE blob, so without
+    // this guard an attacker who only knows the recipient's public KEM key
+    // could encapsulate, encrypt arbitrary plaintext, ship it with sigId=NONE,
+    // and have receive({ sender }) return it as authenticated mail. Refuse it.
+    if (expectedSenderSigPub && parsed.sigId === SIG.NONE) {
+      throw new SignatureError('refusing an unsigned blob while a sender is pinned (signature-downgrade attack)');
+    }
+
     if (parsed.sigId !== SIG.NONE) {
       const sig = sigEngine(parsed.sigId);
       const msg = concat(parsed.ctKem, parsed.senderPub, parsed.nonce, parsed.ciphertext, aad);
