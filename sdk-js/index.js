@@ -150,8 +150,10 @@ async function sha256Hex(data) {
 }
 
 /** Canonical JSON: recursively sorted keys, no whitespace — matches Python
- *  json.dumps(sort_keys=True, separators=(",",":")) for ASCII receipts (F2). */
-function canonicalJSON(value) {
+ *  json.dumps(sort_keys=True, separators=(",",":")) for ASCII receipts (F2).
+ *  Exported so the conformance suite can check the real implementation
+ *  directly instead of keeping a drift-prone embedded copy. */
+export function canonicalJSON(value) {
   if (Array.isArray(value)) return '[' + value.map(canonicalJSON).join(',') + ']';
   if (value && typeof value === 'object') {
     return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonicalJSON(value[k])).join(',') + '}';

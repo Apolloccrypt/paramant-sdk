@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
 import * as cfg from './config.mjs';
 import { call, IMPLS } from './lib/bus.mjs';
@@ -26,16 +27,15 @@ import {
 const require = createRequire(import.meta.url);
 const hexOf = (u8) => Buffer.from(u8).toString('hex');
 
-// sdk-js canonicalJSON, verbatim from sdk-js/index.js:154 (it is an internal,
-// non-exported function — embedded here with citation so the JS form is still
-// checked against the spec anchor). See README "Known limitation".
-function canonicalJSON_sdkjs(value) {
-  if (Array.isArray(value)) return '[' + value.map(canonicalJSON_sdkjs).join(',') + ']';
-  if (value && typeof value === 'object') {
-    return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonicalJSON_sdkjs(value[k])).join(',') + '}';
-  }
-  return JSON.stringify(value);
-}
+// The REAL sdk-js canonicalJSON, imported from its package entry (exported as
+// of 3.2.0). Previously a verbatim copy was embedded here, which could silently
+// drift from the implementation; importing the real function removes that risk.
+const { canonicalJSON: canonicalJSON_sdkjs } = await import(
+  pathToFileURL(cfg.requireDep('sdk-js index.js (canonicalJSON source)', cfg.sdkJsIndex,
+    'Set PARAMANT_SDK_JS_INDEX to the sdk-js package entry.')).href
+);
+assert.equal(typeof canonicalJSON_sdkjs, 'function',
+  'sdk-js must export canonicalJSON (see sdk-js/index.js)');
 
 // ── Preflight: all three real libs must actually load (else fail loudly) ────
 test('preflight: the three real crypto stacks load (no mocks)', () => {
