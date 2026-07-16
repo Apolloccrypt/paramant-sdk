@@ -908,11 +908,11 @@ export class GhostPipe {
   }
 
   async ctLog(from = 0, limit = 100) {
-    return this._json(await this._get('/v2/ct', { from, limit }));
+    return this._json(await this._get('/v2/ct/log', { from, limit }));
   }
 
   async ctProof(index) {
-    return this._json(await this._get(`/v2/ct/${index}`));
+    return this._json(await this._get(`/v2/ct/proof/${index}`));
   }
 
   /**
