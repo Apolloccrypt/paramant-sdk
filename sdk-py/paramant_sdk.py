@@ -707,6 +707,17 @@ class GhostPipe:
         _, body, _ = self._get(f"/v2/status/{hash_}")
         return json.loads(body)
 
+    # -- CT transparency log --------------------------------------------------
+    def ct_log(self, from_: int = 0, limit: int = 100) -> dict:
+        """Fetch CT log entries. Mirror of sdk-js ctLog()."""
+        _, body, _ = self._get('/v2/ct/log', {'from': from_, 'limit': limit})
+        return json.loads(body)
+
+    def ct_proof(self, index: int) -> dict:
+        """Fetch an inclusion proof for CT entry `index`. Mirror of sdk-js ctProof()."""
+        _, body, _ = self._get(f'/v2/ct/proof/{index}')
+        return json.loads(body)
+
     def fingerprint(self, device_id: str = None) -> str:
         target = device_id or self.device
         status, body, _ = self._get(f"/v2/pubkey/{target}")
