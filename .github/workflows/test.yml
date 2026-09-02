@@ -68,11 +68,19 @@ jobs:
       - name: sdk-js deps (noble)
         working-directory: sdk-js
         run: npm install
-      - name: python deps (pqcrypto + cryptography)
+      # Installed FROM sdk-py, not by name. `pip install pqcrypto cryptography`
+      # was unpinned while the package itself declares pqcrypto>=0.4,<1.0, so
+      # the day pqcrypto 1.0.0 was published this job started installing a
+      # version the SDK does not support: `from pqcrypto.kem.ml_kem_768 import`
+      # fails, paramant/crypto.py raises its "pqcrypto >= 0.4 is required"
+      # ImportError, and 14 of 19 conformance tests went red on a change that
+      # touched none of the crypto. Installing the package means the constraint
+      # has ONE home (pyproject.toml) and this job cannot drift away from it.
+      - name: python deps (the SDK's own pinned crypto stack)
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install pqcrypto cryptography
+          .venv/bin/pip install ./sdk-py
       - name: Run conformance
         env:
           PARAMANT_CORE_NODE: ${{ github.workspace }}/../paramant-core/crates/paramant-core-node/index.node

@@ -2,24 +2,47 @@
 
 All notable changes to `paramant-sdk` (Python).
 
-## [3.2.1] - 2026-09-02
+## [3.3.0] - 2026-09-02
 
 Compatibility release for a relay change. `receive()` now gets its delivery
-receipt from relays on both sides of the 2026-09 move, and stops losing it
-quietly when it cannot.
+receipt from relays on both sides of the 2026-09 move, and neither loses it
+quietly nor lets a missing one cost you the data.
+
+Minor, not patch: a call that used to succeed can now emit a `RuntimeWarning`
+and return `receipt=None` where it previously returned a receipt object, and
+`_resolve_receipt` gained an exception on a path that used to return `None`.
 
 ### Fixed
+- **A missing receipt can no longer destroy the payload.** The download is
+  burn-on-read: by the time the receipt is resolved the relay has already
+  destroyed the blob, so the decrypted bytes are the only copy left. 3.2.x
+  resolved the receipt BEFORE decrypting and raised on a 404 from the receipt
+  route (an expired 15 minute window, a per-account cap, a relay restarted
+  between the two calls), throwing that copy away over a missing proof of
+  delivery. `receive()` now decrypts and returns the data first; a receipt that
+  cannot be had becomes `receipt=None` plus a `RuntimeWarning`, with the reason
+  on `GhostPipe.last_receipt_error`.
 - **A receipt that could not be read is no longer silently `None`.** Every
   failure to decode `X-Paramant-Receipt` was swallowed by a bare
-  `except Exception: pass`, so `receive()` returned `(data, None)` and the
-  caller could not tell "this transfer was never receipted" from "the proof of
-  delivery went missing". Those cases now raise the new `ReceiptError`. A
-  download the relay genuinely did not receipt still returns `None`, because
-  there is nothing to fail about.
+  `except Exception: pass`, so the caller could not tell "this transfer was
+  never receipted" from "the proof of delivery went missing". Those cases are
+  now warned about and recorded. A download the relay genuinely did not receipt
+  still returns a plain `None`, with no warning, because there is nothing to
+  fail about.
 - **Response headers are looked up case-insensitively.** `_get` returns
   `dict(r.headers)`, which keeps whatever casing the server sent, so the old
   two-way `.get("x-paramant-receipt") or .get("X-Paramant-Receipt")` depended on
   the relay's exact casing and any proxy that normalised it broke the receipt.
+- **A transport failure while fetching a receipt is wrapped.** `urllib` raises
+  `URLError` for DNS failures, refused connections and timeouts; that now
+  arrives as a `ReceiptError` rather than as a bare transport error.
+- **CI: the conformance job installed an unsupported pqcrypto.** It ran
+  `pip install pqcrypto cryptography`, unpinned, while the package declares
+  `pqcrypto>=0.4,<1.0`. The day pqcrypto 1.0.0 was published that job began
+  installing it, `paramant/crypto.py` raised its "pqcrypto >= 0.4 is required"
+  ImportError, and 14 of 19 conformance tests went red on changes that touched
+  no crypto. The job now installs `./sdk-py` itself, so the constraint has one
+  home and cannot drift.
 
 ### Added
 - **Support for the receipt-by-reference relay.** Relays from 2026-09 answer
@@ -27,15 +50,21 @@ quietly when it cannot.
   `X-Paramant-Receipt-Hash` and `X-Paramant-Receipt-Url` instead of the ~18 KB
   inline receipt, which did not fit in a response header (over Node's 16 KB
   limit and over a default nginx proxy buffer). The SDK fetches
-  `GET /v2/transfers/:receipt_id/receipt` with the same API key and checks the
-  advertised `sha3-256` over the returned bytes before decoding them, so a
-  receipt swapped in transit is rejected rather than returned.
-- `ReceiptError`, a `GhostPipeError` subclass.
+  `GET /v2/transfers/:receipt_id/receipt` with the same API key.
+- **Receipts are verified against the hash the download advertised**, with
+  `hmac.compare_digest`, before being decoded. Required when the relay sends a
+  receipt id, so "send no hash" is not a way around verification, and applied to
+  the inline header too when a hash comes with it, which is what the relay's
+  deprecation opt-in sends.
+- `ReceiptError`, a `GhostPipeError` subclass, and
+  `GhostPipe.last_receipt_error`.
 
 ### Migration
-No API change: `receive()` still returns `(data, receipt_or_None)`. Code that
-relied on a corrupt or unreachable receipt silently becoming `None` now sees a
-`ReceiptError`. Older relays that still send the inline header keep working
+`receive()` still returns `(data, receipt_or_None)` and still raises for a
+failed download. What changes is that a receipt problem no longer raises out of
+`receive()`: check `last_receipt_error`, or turn the `RuntimeWarning` into an
+error with `warnings.simplefilter("error")`, if your flow requires proof of
+delivery. Older relays that still send the inline header keep working
 unchanged.
 
 ## [3.1.0] — 2026-05-23

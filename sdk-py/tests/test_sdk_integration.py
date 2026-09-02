@@ -38,7 +38,7 @@ def test_version_is_current():
     # One version string, asserted in one place. The name used to say 3_1_0
     # while the assertion said 3.2.0, which is how a version check stops being
     # one.
-    assert paramant_sdk.__version__ == "3.2.1"
+    assert paramant_sdk.__version__ == "3.3.0"
     assert paramant.__version__ == paramant_sdk.__version__
 
 

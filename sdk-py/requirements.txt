@@ -1,5 +1,5 @@
 #
-# paramant-sdk 3.2.1 runtime dependencies.
+# paramant-sdk 3.3.0 runtime dependencies.
 #
 # Regenerate with:
 #   pip-compile --output-file=requirements.txt pyproject.toml

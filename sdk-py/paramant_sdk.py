@@ -1,5 +1,5 @@
 """
-PARAMANT SDK v3.2.1 — post-quantum file relay client.
+PARAMANT SDK v3.3.0 — post-quantum file relay client.
 
 Replaces the v2.x _try_kyber() helper (which fell back to ECDH silently when
 kyber-py was missing) with pqcrypto (ML-KEM-768 + ML-DSA-65). Blobs follow
@@ -34,7 +34,7 @@ import urllib.request
 from paramant import capabilities, crypto, wire_format
 from paramant.errors import CapabilityMismatch, ParamantError, UnsupportedAlgorithm
 
-__version__ = "3.2.1"
+__version__ = "3.3.0"
 
 # ── Padding block sizes ────────────────────────────────────────────────────────
 BLOCKS = {
@@ -130,7 +130,7 @@ class ReceiptError(GhostPipeError):
 
     A receipt is the proof that a specific blob was delivered and burned, so a
     receipt that quietly turns into None is worse than no receipt at all: the
-    caller cannot tell the two apart. Before 3.2.1 that is exactly what
+    caller cannot tell the two apart. Before 3.3.0 that is exactly what
     happened, because the receipt rode in the X-Paramant-Receipt response
     header and every failure to read it was swallowed.
     """
@@ -231,6 +231,10 @@ class GhostPipe:
             raise GhostPipeError("No relay reachable. Check your API key.")
         self._keypair: Optional[dict] = None
         self._capabilities: Optional[capabilities.RelayCapabilities] = None
+        # Why the last receive() returned receipt=None, when it did so because
+        # the receipt could not be had rather than because there was none. Set
+        # on every receive(), so it never describes an older call.
+        self.last_receipt_error: Optional[ReceiptError] = None
         self._skip_negotiation = not negotiate_on_init
         if negotiate_on_init:
             self._negotiate()
@@ -707,26 +711,47 @@ class GhostPipe:
         the bytes, fetched from GET /v2/transfers/:receipt_id/receipt with the
         same API key.
 
-        Both shapes are accepted. What is NOT accepted any more is silence: if
-        the relay says a receipt exists and it cannot be produced and checked,
-        this raises instead of returning None. A download that was never
-        receipted at all (an anonymous drop, a relay with no CT entry for the
-        blob) still returns None, because there is nothing to fail about.
+        Both shapes are accepted, and both are VERIFIED when the relay
+        advertises a hash: an inline header sent alongside a reference (which is
+        what the deprecation opt-in does) is checked against the same
+        X-Paramant-Receipt-Hash as the fetched one.
+
+        Raises ReceiptError when the relay says a receipt exists and it cannot
+        be produced and checked. A download that was never receipted at all (an
+        anonymous drop, a relay with no CT entry for the blob) returns None,
+        because there is nothing to fail about.
+
+        NOTE ON CALLERS. This raises; `receive()` does NOT propagate it, because
+        by the time it runs the blob is already burned. See receive().
         """
         inline = self._header(headers, "X-Paramant-Receipt")
+        receipt_id = self._header(headers, "X-Paramant-Receipt-Id")
+        advertised = self._header(headers, "X-Paramant-Receipt-Hash")
+
         if inline:
+            # An inline receipt is checked too when a hash came with it. Skipping
+            # that would leave the opt-in path, the one an operator turns on for
+            # OLD clients, as the only unverified way to get a receipt.
+            self._verify_receipt_hash(inline, advertised, required=False)
             try:
                 return self._decode_receipt(inline)
             except Exception as e:
                 raise ReceiptError(f"Relay sent an X-Paramant-Receipt header that does not decode: {e}") from e
 
-        receipt_id = self._header(headers, "X-Paramant-Receipt-Id")
         if not receipt_id:
             # Nothing advertised: this transfer carries no receipt.
             return None
 
         path = self._header(headers, "X-Paramant-Receipt-Url") or f"/v2/transfers/{receipt_id}/receipt"
-        status, body, _ = self._get(path)
+        try:
+            status, body, _ = self._get(path)
+        except ReceiptError:
+            raise
+        except Exception as e:
+            # urllib raises URLError for DNS, refused connections and timeouts,
+            # and that must not surface as a bare transport error from a call
+            # the caller made about a receipt.
+            raise ReceiptError(f"Could not reach {path} to fetch receipt {receipt_id}: {e}") from e
         if status != 200:
             raise ReceiptError(
                 f"Relay advertised receipt {receipt_id} but {path} answered HTTP {status}. "
@@ -738,21 +763,34 @@ class GhostPipe:
         except Exception as e:
             raise ReceiptError(f"Receipt endpoint {path} did not return a receipt: {e}") from e
 
-        advertised = self._header(headers, "X-Paramant-Receipt-Hash") or payload.get("receipt_hash")
-        if advertised:
-            algo, _, expected = advertised.partition(":")
-            if algo != "sha3-256" or not expected:
-                raise ReceiptError(f"Unsupported receipt hash advertised by the relay: {advertised!r}")
-            actual = hashlib.sha3_256(b64.encode("ascii")).hexdigest()
-            if not hmac.compare_digest(actual, expected):
-                raise ReceiptError(
-                    "Receipt hash mismatch: the bytes fetched are not the bytes the download "
-                    f"promised (advertised {expected[:16]}..., got {actual[:16]}...)."
-                )
+        # REQUIRED here. A relay that hands out a receipt id and no hash gives
+        # the client nothing to check the fetched bytes against, and "no hash"
+        # must not be the easy way to skip verification.
+        self._verify_receipt_hash(b64, advertised or payload.get("receipt_hash"), required=True)
         try:
             return self._decode_receipt(b64)
         except Exception as e:
             raise ReceiptError(f"Receipt from {path} does not decode: {e}") from e
+
+    @staticmethod
+    def _verify_receipt_hash(b64: str, advertised: Optional[str], required: bool) -> None:
+        """Check a receipt payload against the hash the download advertised."""
+        if not advertised:
+            if required:
+                raise ReceiptError(
+                    "Relay advertised a receipt id but no X-Paramant-Receipt-Hash, so the "
+                    "fetched receipt cannot be checked against what the download promised."
+                )
+            return
+        algo, _, expected = advertised.partition(":")
+        if algo != "sha3-256" or not expected:
+            raise ReceiptError(f"Unsupported receipt hash advertised by the relay: {advertised!r}")
+        actual = hashlib.sha3_256(b64.encode("ascii")).hexdigest()
+        if not hmac.compare_digest(actual, expected):
+            raise ReceiptError(
+                "Receipt hash mismatch: the receipt is not the one the download "
+                f"promised (advertised {expected[:16]}..., got {actual[:16]}...)."
+            )
 
     def receive(self, hash_: str, pre_shared_secret: str = "",
                 sender: Optional[str] = None) -> Tuple[bytes, Optional[dict]]:
@@ -768,7 +806,6 @@ class GhostPipe:
             raise GhostPipeError("Blob not found. Expired, already retrieved, or never stored.")
         if status != 200:
             raise GhostPipeError(f"Download failed: HTTP {status}")
-        receipt = self._resolve_receipt(headers)
 
         expected_sig_pub = None
         if sender is not None:
@@ -784,6 +821,31 @@ class GhostPipe:
             )
         data = self._decrypt(raw, pre_shared_secret=pre_shared_secret,
                              expected_sender_sig_pub=expected_sig_pub)
+
+        # THE RECEIPT COMES LAST, AND IT CAN NEVER COST YOU THE PAYLOAD.
+        # The GET above is burn-on-read: the relay destroyed the blob to answer
+        # it, so `raw` is the only copy left in the world. Resolving the receipt
+        # first, and raising on a 404 from the receipt route (an expired window,
+        # a per-account cap, a relay restarted between the two calls), threw that
+        # copy away over a missing proof of delivery. That trade is never worth
+        # making: a receipt can be missed, the plaintext cannot be re-fetched.
+        #
+        # So a receipt that cannot be had becomes receipt=None plus a warning,
+        # and the reason is kept on `last_receipt_error` for a caller that wants
+        # to check it deliberately.
+        self.last_receipt_error = None
+        try:
+            receipt = self._resolve_receipt(headers)
+        except ReceiptError as e:
+            self.last_receipt_error = e
+            receipt = None
+            warnings.warn(
+                f"paramant-sdk: the data was decrypted and returned, but its delivery "
+                f"receipt could not be obtained: {e} "
+                "(the blob is burned; the payload is in hand, the proof of delivery is not. "
+                "Inspect GhostPipe.last_receipt_error to handle this deliberately.)",
+                RuntimeWarning, stacklevel=2,
+            )
         return data, receipt
 
     def status(self, hash_: str) -> dict:
