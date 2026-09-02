@@ -1,5 +1,5 @@
 // Type definitions for paramant-sdk
-// Version: 3.2.0
+// Version: 3.3.0
 // Wire format: v1 (PQHB). KEM: ML-KEM-768. Sig: ML-DSA-65 or anonymous.
 
 export const VERSION: string;

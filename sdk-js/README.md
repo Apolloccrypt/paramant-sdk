@@ -9,7 +9,7 @@ post-quantum signatures (ML-DSA-65). Produces Paramant wire-format v1
 Negotiates supported algorithms with the relay's `/v2/capabilities` endpoint
 before the first send.
 
-**Version:** 3.2.0 · Node.js 18+ · browsers with WebCrypto
+**Version:** 3.3.0 · Node.js 18+ · browsers with WebCrypto
 
 > ### Breaking changes from 2.x
 >
