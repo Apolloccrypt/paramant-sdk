@@ -9,6 +9,7 @@ from unittest import mock
 
 import pytest
 
+import paramant
 import paramant_sdk
 from paramant import wire_format
 from paramant_sdk import GhostPipe, GhostPipeError
@@ -33,8 +34,12 @@ def _make_gp(home_tmp, device: str, kem_id=0x0002, sig_id=0x0002):
     )
 
 
-def test_version_is_3_1_0():
-    assert paramant_sdk.__version__ == "3.2.0"
+def test_version_is_current():
+    # One version string, asserted in one place. The name used to say 3_1_0
+    # while the assertion said 3.2.0, which is how a version check stops being
+    # one.
+    assert paramant_sdk.__version__ == "3.2.1"
+    assert paramant.__version__ == paramant_sdk.__version__
 
 
 def test_encrypt_decrypt_round_trip_signed(home_tmp):

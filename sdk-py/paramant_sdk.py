@@ -1,5 +1,5 @@
 """
-PARAMANT SDK v3.2.0 — post-quantum file relay client.
+PARAMANT SDK v3.2.1 — post-quantum file relay client.
 
 Replaces the v2.x _try_kyber() helper (which fell back to ECDH silently when
 kyber-py was missing) with pqcrypto (ML-KEM-768 + ML-DSA-65). Blobs follow
@@ -18,6 +18,7 @@ Public surface kept for compatibility with v2.x callers:
 import base64
 import ctypes
 import hashlib
+import hmac
 import json
 import os
 import struct
@@ -33,7 +34,7 @@ import urllib.request
 from paramant import capabilities, crypto, wire_format
 from paramant.errors import CapabilityMismatch, ParamantError, UnsupportedAlgorithm
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 # ── Padding block sizes ────────────────────────────────────────────────────────
 BLOCKS = {
@@ -122,6 +123,17 @@ class GhostPipeError(ParamantError):
 
 class SignatureError(GhostPipeError):
     """Raised when a blob's ML-DSA sender signature fails to verify (F1)."""
+
+
+class ReceiptError(GhostPipeError):
+    """Raised when the relay says a delivery receipt exists and it cannot be had.
+
+    A receipt is the proof that a specific blob was delivered and burned, so a
+    receipt that quietly turns into None is worse than no receipt at all: the
+    caller cannot tell the two apart. Before 3.2.1 that is exactly what
+    happened, because the receipt rode in the X-Paramant-Receipt response
+    header and every failure to read it was swallowed.
+    """
 
 
 class FingerprintMismatchError(GhostPipeError):
@@ -663,6 +675,85 @@ class GhostPipe:
         finally:
             _zero(aes_key); _zero(entropy)
 
+    @staticmethod
+    def _header(headers: dict, name: str) -> Optional[str]:
+        """Case-insensitive header lookup.
+
+        `_get` returns `dict(r.headers)`, which keeps whatever casing the server
+        sent, so a plain `.get("x-paramant-receipt")` only worked because the
+        relay happened to send that exact casing. Header names are
+        case-insensitive on the wire; anything else is a bug waiting for a proxy
+        to normalise them.
+        """
+        want = name.lower()
+        for k, v in headers.items():
+            if k.lower() == want:
+                return v
+        return None
+
+    @staticmethod
+    def _decode_receipt(b64: str) -> dict:
+        padded = b64.replace("-", "+").replace("_", "/")
+        padded += "=" * ((4 - len(padded) % 4) % 4)
+        return json.loads(base64.b64decode(padded).decode("utf-8"))
+
+    def _resolve_receipt(self, headers: dict) -> Optional[dict]:
+        """Get the delivery receipt for a download, old relay or new.
+
+        Relays up to 2026-09 put the whole signed receipt in the
+        X-Paramant-Receipt response header. That payload is ~18 KB, over Node's
+        16 KB header limit and over a default nginx proxy buffer, so newer
+        relays hand over a REFERENCE instead: a receipt id plus the sha3-256 of
+        the bytes, fetched from GET /v2/transfers/:receipt_id/receipt with the
+        same API key.
+
+        Both shapes are accepted. What is NOT accepted any more is silence: if
+        the relay says a receipt exists and it cannot be produced and checked,
+        this raises instead of returning None. A download that was never
+        receipted at all (an anonymous drop, a relay with no CT entry for the
+        blob) still returns None, because there is nothing to fail about.
+        """
+        inline = self._header(headers, "X-Paramant-Receipt")
+        if inline:
+            try:
+                return self._decode_receipt(inline)
+            except Exception as e:
+                raise ReceiptError(f"Relay sent an X-Paramant-Receipt header that does not decode: {e}") from e
+
+        receipt_id = self._header(headers, "X-Paramant-Receipt-Id")
+        if not receipt_id:
+            # Nothing advertised: this transfer carries no receipt.
+            return None
+
+        path = self._header(headers, "X-Paramant-Receipt-Url") or f"/v2/transfers/{receipt_id}/receipt"
+        status, body, _ = self._get(path)
+        if status != 200:
+            raise ReceiptError(
+                f"Relay advertised receipt {receipt_id} but {path} answered HTTP {status}. "
+                "The receipt is kept for a limited window; fetch it right after the download."
+            )
+        try:
+            payload = json.loads(body)
+            b64 = payload["receipt"]
+        except Exception as e:
+            raise ReceiptError(f"Receipt endpoint {path} did not return a receipt: {e}") from e
+
+        advertised = self._header(headers, "X-Paramant-Receipt-Hash") or payload.get("receipt_hash")
+        if advertised:
+            algo, _, expected = advertised.partition(":")
+            if algo != "sha3-256" or not expected:
+                raise ReceiptError(f"Unsupported receipt hash advertised by the relay: {advertised!r}")
+            actual = hashlib.sha3_256(b64.encode("ascii")).hexdigest()
+            if not hmac.compare_digest(actual, expected):
+                raise ReceiptError(
+                    "Receipt hash mismatch: the bytes fetched are not the bytes the download "
+                    f"promised (advertised {expected[:16]}..., got {actual[:16]}...)."
+                )
+        try:
+            return self._decode_receipt(b64)
+        except Exception as e:
+            raise ReceiptError(f"Receipt from {path} does not decode: {e}") from e
+
     def receive(self, hash_: str, pre_shared_secret: str = "",
                 sender: Optional[str] = None) -> Tuple[bytes, Optional[dict]]:
         """Retrieve data from the relay by blob hash. Burn-on-read.
@@ -677,15 +768,7 @@ class GhostPipe:
             raise GhostPipeError("Blob not found. Expired, already retrieved, or never stored.")
         if status != 200:
             raise GhostPipeError(f"Download failed: HTTP {status}")
-        receipt = None
-        receipt_b64 = headers.get("x-paramant-receipt") or headers.get("X-Paramant-Receipt")
-        if receipt_b64:
-            try:
-                padded = receipt_b64.replace("-", "+").replace("_", "/")
-                padded += "=" * ((4 - len(padded) % 4) % 4)
-                receipt = json.loads(base64.b64decode(padded).decode("utf-8"))
-            except Exception:
-                pass
+        receipt = self._resolve_receipt(headers)
 
         expected_sig_pub = None
         if sender is not None:

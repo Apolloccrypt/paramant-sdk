@@ -2,6 +2,42 @@
 
 All notable changes to `paramant-sdk` (Python).
 
+## [3.2.1] - 2026-09-02
+
+Compatibility release for a relay change. `receive()` now gets its delivery
+receipt from relays on both sides of the 2026-09 move, and stops losing it
+quietly when it cannot.
+
+### Fixed
+- **A receipt that could not be read is no longer silently `None`.** Every
+  failure to decode `X-Paramant-Receipt` was swallowed by a bare
+  `except Exception: pass`, so `receive()` returned `(data, None)` and the
+  caller could not tell "this transfer was never receipted" from "the proof of
+  delivery went missing". Those cases now raise the new `ReceiptError`. A
+  download the relay genuinely did not receipt still returns `None`, because
+  there is nothing to fail about.
+- **Response headers are looked up case-insensitively.** `_get` returns
+  `dict(r.headers)`, which keeps whatever casing the server sent, so the old
+  two-way `.get("x-paramant-receipt") or .get("X-Paramant-Receipt")` depended on
+  the relay's exact casing and any proxy that normalised it broke the receipt.
+
+### Added
+- **Support for the receipt-by-reference relay.** Relays from 2026-09 answer
+  `GET /v2/outbound/:hash` with `X-Paramant-Receipt-Id`,
+  `X-Paramant-Receipt-Hash` and `X-Paramant-Receipt-Url` instead of the ~18 KB
+  inline receipt, which did not fit in a response header (over Node's 16 KB
+  limit and over a default nginx proxy buffer). The SDK fetches
+  `GET /v2/transfers/:receipt_id/receipt` with the same API key and checks the
+  advertised `sha3-256` over the returned bytes before decoding them, so a
+  receipt swapped in transit is rejected rather than returned.
+- `ReceiptError`, a `GhostPipeError` subclass.
+
+### Migration
+No API change: `receive()` still returns `(data, receipt_or_None)`. Code that
+relied on a corrupt or unreachable receipt silently becoming `None` now sees a
+`ReceiptError`. Older relays that still send the inline header keep working
+unchanged.
+
 ## [3.1.0] — 2026-05-23
 
 Security release. Wire format unchanged (still v1, PQHB version `0x01`) — the relay
