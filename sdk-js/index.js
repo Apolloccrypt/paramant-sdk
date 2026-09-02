@@ -1,5 +1,5 @@
 /**
- * Paramant Ghost Pipe SDK v3.2.0
+ * Paramant Ghost Pipe SDK v3.3.0
  * ===================================
  * Real post-quantum (ML-KEM-768 + ML-DSA-65) zero-plaintext file transport.
  *
@@ -23,7 +23,7 @@ const _nodeRequire = (typeof process !== 'undefined' && process.versions?.node)
   ? (await import('node:module')).createRequire(import.meta.url)
   : null;
 
-export const VERSION = '3.2.0';
+export const VERSION = '3.3.0';
 export const WIRE_VERSION = 1;
 
 // KEM / SIG IDs from docs/wire-format-v1.md registry.

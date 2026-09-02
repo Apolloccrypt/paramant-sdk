@@ -1,5 +1,40 @@
 # Changelog
 
+## 3.3.0 - 2026-09-02
+
+Version-only release, cut in lockstep with sdk-py 3.3.0. No behaviour, API or
+wire-format change in this package; both SDKs publish from one tag, and the
+release workflow requires `sdk-js/package.json` to carry the tag version
+exactly, so the JS package moves with the Python one.
+
+### Relay compatibility
+
+sdk-py 3.3.0 exists because relays from 2026-09 no longer put the whole signed
+delivery receipt in the `X-Paramant-Receipt` response header (~18 KB, over
+Node's 16 KB header limit and over a default nginx proxy buffer). They send a
+reference instead, plus `X-Paramant-Receipt-Deprecated`, and the full receipt is
+fetched from `GET /v2/transfers/:receipt_id/receipt` with the same API key,
+valid for 15 minutes.
+
+**That change does not affect this SDK, because this SDK never read the header.**
+`httpRequest()` returns `{ status, body }` and drops response headers entirely,
+so `receive()` has never surfaced a delivery receipt on any relay version. There
+was nothing to break and nothing to migrate.
+
+- Works against relay 3.1.0+ (receipt by reference) and against older relays,
+  identically.
+- The opt-in `PARAMANT_INLINE_RECEIPT_HEADER` on an older relay, which restores
+  the inline header for old clients, changes nothing here either.
+
+### Known gap (not fixed in this release)
+
+`verifyReceipt()` verifies a receipt the caller already has, but nothing in this
+SDK obtains one: `receive()` returns only the decrypted bytes. A JS caller needs
+the receipt out of band (sdk-py, or a direct call to the relay). Surfacing the
+receipt from `receive()` — fetching it by reference, checking its sha3-256, and
+never letting a missing receipt cost the payload, as sdk-py 3.3.0 does — is a
+separate change to the HTTP layer and is not part of this release.
+
 ## 3.2.0 - 2026-05-28
 
 ### Deprecated

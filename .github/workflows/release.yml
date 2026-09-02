@@ -7,7 +7,10 @@ name: release
 # One-time setup (see RELEASING.md):
 #   PyPI: configure a Trusted Publisher (OIDC) on the paramant-sdk project, so
 #         no token is needed here.
-#   npm:  add an automation token as the NPM_TOKEN repository secret.
+#   npm:  add an automation token as the NPM_TOKEN repository secret. Without it
+#         the npm job still runs its version check and tests, then SKIPS the
+#         publish with a warning instead of failing, so a missing npm token
+#         never blocks the PyPI publish (they are separate jobs).
 
 on:
   release:
@@ -58,6 +61,19 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+      # A job-level `if:` cannot read `secrets`, so the check lives here and
+      # gates the publish step. The version check and the tests run either way:
+      # they are the gate that says the tag is coherent, and they cost nothing.
+      - name: Is NPM_TOKEN configured?
+        id: npm_token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Version matches release tag
         if: github.event_name == 'release'
         working-directory: sdk-js
@@ -72,7 +88,26 @@ jobs:
           npm install
           npm test
       - name: Publish to npm
+        if: steps.npm_token.outputs.present == 'true'
         working-directory: sdk-js
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Skipped — no NPM_TOKEN
+        if: steps.npm_token.outputs.present != 'true'
+        run: |
+          VER=$(node -p "require('./sdk-js/package.json').version")
+          echo "::warning title=npm publish skipped::NPM_TOKEN is not set on this repository, so paramant-sdk@$VER was NOT published to npm. The PyPI publish is a separate job and was not affected."
+          {
+            echo "### npm publish skipped"
+            echo
+            echo "\`paramant-sdk@$VER\` was **not** published to npm: the repository has no"
+            echo "\`NPM_TOKEN\` secret, so \`npm publish\` would fail with E401."
+            echo
+            echo "The build and the test gate ran and passed; only the publish step was skipped,"
+            echo "and the PyPI job is unaffected."
+            echo
+            echo "To publish: Settings, Secrets and variables, Actions, add \`NPM_TOKEN\`"
+            echo "(an npm automation token with publish rights to \`paramant-sdk\`), then re-run"
+            echo "this workflow with \`workflow_dispatch\`. See RELEASING.md."
+          } >> "$GITHUB_STEP_SUMMARY"
